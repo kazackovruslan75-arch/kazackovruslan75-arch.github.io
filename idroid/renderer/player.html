@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-eval'">
+  <title>iDroid Player</title>
+  <link rel="stylesheet" href="common.css">
+  <link rel="stylesheet" href="player.css">
+</head>
+<body>
+  <div id="root">
+    <div class="titlebar" id="titlebar"></div>
+    <div class="body">
+      <div class="stage" id="stage">
+        <div class="screen" id="screen">
+          <canvas id="cv"></canvas>
+          <div id="springboard"></div>
+          <div id="overlay"></div>
+          <div id="fps" hidden></div>
+          <div id="homebar" title="Домой"><i></i></div>
+          <div id="boot">
+            <div class="boot-logo"></div>
+            <div class="boot-text" id="bootText">Запуск Android…</div>
+            <div class="boot-spin"></div>
+            <div class="boot-actions" id="bootActions"></div>
+          </div>
+        </div>
+        <div id="drop">Отпустите, чтобы установить APK или передать файлы</div>
+      </div>
+      <div class="panel" id="panel"></div>
+      <div class="sidebar" id="sidebar"></div>
+    </div>
+  </div>
+  <script src="player.js"></script>
+</body>
+</html>

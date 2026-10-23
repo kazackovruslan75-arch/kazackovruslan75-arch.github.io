@@ -1,0 +1,47 @@
+name: iDroid Player — сборка
+
+on:
+  push:
+    paths:
+      - 'idroid/**'
+      - '.github/workflows/idroid-build.yml'
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: idroid
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: idroid/package-lock.json
+
+      - run: npm ci
+      - run: npm run check
+
+      - name: Сборка для Linux (AppImage + deb)
+        if: runner.os == 'Linux'
+        run: npx electron-builder --linux AppImage deb --publish never
+
+      - name: Сборка для Windows (установщик + portable)
+        if: runner.os == 'Windows'
+        run: npx electron-builder --win nsis portable --publish never
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iDroid-Player-${{ runner.os }}
+          path: |
+            idroid/dist/*.AppImage
+            idroid/dist/*.deb
+            idroid/dist/*.exe
+          if-no-files-found: error

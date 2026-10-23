@@ -1,0 +1,72 @@
+{
+  "name": "idroid-player",
+  "productName": "iDroid Player",
+  "version": "1.0.0",
+  "description": "Android x86_64/x86 эмулятор с Google Play и интерфейсом в стиле iOS для Windows и Linux",
+  "main": "main.js",
+  "author": "kazackovruslan75-arch",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "check": "node scripts/check.js",
+    "dist:linux": "electron-builder --linux AppImage deb",
+    "dist:win": "electron-builder --win nsis portable"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.12.5",
+    "@grpc/proto-loader": "^0.7.13",
+    "extract-zip": "^2.0.1",
+    "fast-xml-parser": "^4.5.1"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "io.github.kazackovruslan75.idroid",
+    "productName": "iDroid Player",
+    "files": [
+      "main.js",
+      "src/**",
+      "renderer/**",
+      "proto/**",
+      "assets/**",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "linux": {
+      "category": "Utility",
+      "icon": "assets/icon.png",
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "maintainer": "kazackovruslan75-arch <kazackovruslan75-arch@users.noreply.github.com>",
+      "executableName": "idroid-player"
+    },
+    "win": {
+      "icon": "assets/icon.png",
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "iDroid Player"
+    },
+    "artifactName": "iDroid-Player-${version}-${os}-${arch}.${ext}",
+    "portable": {
+      "artifactName": "iDroid-Player-${version}-portable.exe"
+    },
+    "publish": null
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kazackovruslan75-arch/kazackovruslan75-arch.github.io.git",
+    "directory": "idroid"
+  }
+}
