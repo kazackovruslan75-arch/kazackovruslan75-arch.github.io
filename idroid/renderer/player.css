@@ -208,3 +208,24 @@
 .popup .pi svg { width: 16px; height: 16px; color: var(--text2); }
 .svgi { display: inline-grid; place-items: center; }
 .svgi svg { width: 16px; height: 16px; }
+
+/* iOS 26 — Liquid Glass: блик сверху, стеклянная кромка, объёмный символ */
+#springboard.ios26 .sb-icon { border-radius: 24%; box-shadow: 0 6px 16px rgba(0, 0, 0, .26), 0 1px 2px rgba(0, 0, 0, .18); }
+#springboard.ios26 .sb-icon::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 2;
+  background:
+    radial-gradient(110% 65% at 28% -5%, rgba(255, 255, 255, .55), rgba(255, 255, 255, 0) 60%),
+    linear-gradient(180deg, rgba(255, 255, 255, .16), rgba(255, 255, 255, 0) 45%, rgba(0, 0, 0, .07));
+}
+#springboard.ios26 .sb-icon::after {
+  z-index: 3;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .38), inset 0 1.5px 0 rgba(255, 255, 255, .7), inset 0 -1.5px 2px rgba(0, 0, 0, .16);
+}
+#springboard.ios26 .sb-icon svg { filter: drop-shadow(0 1.2px 1.4px rgba(0, 0, 0, .22)); }
+#springboard.ios26 .sb-dock, #springboard.ios26 .sb-search-wrap, #springboard.ios26 .sb-menu {
+  background: rgba(255, 255, 255, .14);
+  backdrop-filter: blur(16px) saturate(2.1) brightness(1.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .6), inset 0 -1px 0 rgba(255, 255, 255, .14), inset 0 0 0 1px rgba(255, 255, 255, .22), 0 10px 30px rgba(0, 0, 0, .22);
+}
+#springboard.ios26 .sb-dock { border-radius: 34px; }
+#springboard.ios26 .sb-menu { background: rgba(60, 60, 66, .5); }

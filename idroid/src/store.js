@@ -38,6 +38,7 @@ const DEFAULTS = {
     iosHome: true,
     playIcons: true,
     iosSystemIcons: true,
+    iconStyle: 'ios26',
     wallpaper: 'aurora',
     theme: 'dark',
     dock: ['com.android.vending', 'com.android.chrome', 'com.android.settings', 'com.google.android.youtube'],

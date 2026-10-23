@@ -296,6 +296,7 @@ const BUILDERS = {
       group('Домашний экран', [
         cell('home', '#0a84ff', 'Домашний экран iOS', sw(ui.iosHome, (v) => setUi({ iosHome: v })), 'Сетка иконок, док и строка состояния в стиле iOS вместо лаунчера Android'),
         cell('palette', '#ff9f0a', 'iOS-иконки системных приложений', sw(ui.iosSystemIcons, (v) => setUi({ iosSystemIcons: v }))),
+        cell('palette', '#bf5af2', 'Стиль иконок', seg([['ios26', 'iOS 26 · Liquid Glass'], ['ios18', 'iOS 18']], ui.iconStyle || 'ios26', (v) => setUi({ iconStyle: v }))),
         cell('apk', '#30d158', 'Иконки приложений из Google Play', sw(ui.playIcons, (v) => setUi({ playIcons: v })), 'Загружаются один раз и хранятся локально'),
       ]),
       group('Обои', [walls]),

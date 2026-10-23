@@ -195,6 +195,7 @@ class Springboard {
     const W = R.clientWidth || 800;
     const H = R.clientHeight || 600;
     R.style.background = WALLPAPERS[ui.wallpaper] || WALLPAPERS.aurora;
+    R.classList.toggle('ios26', ui.iconStyle !== 'ios18');
     R.innerHTML = '';
     const landscape = W > H;
     const scale = Math.min(W, H);
