@@ -1,0 +1,254 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>PC Remote</title>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #111; color: #eee; font: 14px system-ui, sans-serif; overflow: hidden; }
+  body { display: flex; flex-direction: column; }
+  #stage { flex: 1; position: relative; overflow: hidden; touch-action: none; display: flex; align-items: center; justify-content: center; }
+  #screen { max-width: 100%; max-height: 100%; user-select: none; -webkit-user-drag: none; pointer-events: none; transform-origin: 0 0; }
+  #status { position: absolute; top: 6px; left: 6px; font-size: 11px; background: #0008; padding: 2px 6px; border-radius: 4px; pointer-events: none; }
+  #bar, #keys { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; background: #1c1c1c; }
+  #keys { display: none; border-top: 1px solid #333; }
+  #keys.open { display: flex; }
+  button, select { flex: 1 0 auto; min-width: 44px; height: 40px; border: 0; border-radius: 8px; background: #2d2d2d; color: #eee; font-size: 14px; padding: 0 8px; }
+  button:active, button.on { background: #3a6df0; }
+  #kbd { position: absolute; left: -1000px; top: 0; opacity: 0; width: 10px; height: 10px; }
+</style>
+</head>
+<body>
+<div id="stage">
+  <img id="screen" alt="">
+  <div id="status">подключение…</div>
+</div>
+<input id="kbd" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+<div id="keys">
+  <button data-k="esc">Esc</button><button data-k="tab">Tab</button><button data-k="win">Win</button>
+  <button data-k="backspace">⌫</button><button data-k="delete">Del</button><button data-k="enter">Enter</button>
+  <button data-k="left">←</button><button data-k="up">↑</button><button data-k="down">↓</button><button data-k="right">→</button>
+  <button data-k="home">Home</button><button data-k="end">End</button><button data-k="pageup">PgUp</button><button data-k="pagedown">PgDn</button>
+  <button data-mod="ctrl">Ctrl</button><button data-mod="alt">Alt</button><button data-mod="shift">Shift</button>
+  <button data-c="ctrl+c">Копир.</button><button data-c="ctrl+v">Вставить</button><button data-c="ctrl+z">Отмена</button><button data-c="ctrl+a">Всё</button>
+  <button data-c="alt+tab">Alt+Tab</button><button data-c="alt+f4">Alt+F4</button><button data-c="win+d">Рабочий стол</button><button data-c="ctrl+shift+esc">Дисп. задач</button>
+  <button data-k="f5">F5</button><button data-k="f11">F11</button>
+  <button data-k="voldown">🔉</button><button data-k="volup">🔊</button><button data-k="mute">🔇</button><button data-k="playpause">⏯</button>
+  <select id="mon"></select>
+  <select id="quality">
+    <option value="960,45">Быстро</option>
+    <option value="1280,60" selected>Норм</option>
+    <option value="1920,75">Чётко</option>
+    <option value="3840,85">Макс</option>
+  </select>
+  <button id="zoom">Зум 1x</button>
+  <button id="fs">⛶ Экран</button>
+</div>
+<div id="bar">
+  <button id="mode">🖱 Тачпад</button>
+  <button id="lmb">ЛКМ</button>
+  <button id="rmb">ПКМ</button>
+  <button id="hold">Зажать</button>
+  <button id="kb">⌨</button>
+  <button id="more">⋯</button>
+</div>
+<script>
+const $ = s => document.querySelector(s);
+const img = $('#screen'), stage = $('#stage'), status = $('#status'), kbd = $('#kbd');
+let ws, touchpad = false, holding = false, zoom = 1, panX = 0, panY = 0;
+const mods = new Set();
+
+function send(o) { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); }
+
+function connect() {
+  ws = new WebSocket((location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/ws');
+  ws.binaryType = 'blob';
+  let frames = 0, t0 = performance.now();
+  ws.onopen = () => { applyQuality(); send({t: 'next'}); };
+  ws.onmessage = e => {
+    if (typeof e.data === 'string') {
+      const m = JSON.parse(e.data);
+      if (m.t === 'info') {
+        const sel = $('#mon'), cur = sel.value || '0';
+        sel.innerHTML = m.mons.map((d, i) => `<option value="${i}">Монитор ${i + 1} (${d[0]}×${d[1]})</option>`).join('');
+        sel.value = cur;
+      }
+      return;
+    }
+    const url = URL.createObjectURL(e.data);
+    img.onload = () => { URL.revokeObjectURL(url); send({t: 'next'}); };
+    img.onerror = () => send({t: 'next'});
+    img.src = url;
+    frames++;
+    const now = performance.now();
+    if (now - t0 > 1000) { status.textContent = `${Math.round(frames * 1000 / (now - t0))} fps${touchpad ? ' · тачпад' : ''}`; frames = 0; t0 = now; }
+  };
+  ws.onclose = () => { status.textContent = 'нет связи, переподключение…'; setTimeout(connect, 1000); };
+}
+
+function applyQuality() {
+  const [w, q] = $('#quality').value.split(',').map(Number);
+  send({t: 'cfg', w, q, mon: Number($('#mon').value || 0)});
+}
+$('#quality').onchange = applyQuality;
+$('#mon').onchange = applyQuality;
+
+// ---- зум (в режиме экрана) ----
+function applyZoom() {
+  img.style.transform = zoom === 1 ? '' : `translate(${panX}px, ${panY}px) scale(${zoom})`;
+  img.style.position = zoom === 1 ? '' : 'absolute';
+  if (zoom !== 1) { img.style.left = '0'; img.style.top = '0'; }
+  $('#zoom').textContent = `Зум ${zoom}x`;
+}
+$('#zoom').onclick = () => {
+  zoom = zoom === 1 ? 2 : zoom === 2 ? 3 : 1;
+  const r = stage.getBoundingClientRect();
+  panX = -(r.width * (zoom - 1)) / 2; panY = -(r.height * (zoom - 1)) / 2;
+  applyZoom();
+};
+function clampPan() {
+  const r = stage.getBoundingClientRect(), w = img.offsetWidth * zoom, h = img.offsetHeight * zoom;
+  panX = Math.min(0, Math.max(r.width - w, panX));
+  panY = Math.min(0, Math.max(r.height - h, panY));
+}
+
+// координаты касания -> доля экрана ПК (0..1)
+function toNorm(cx, cy) {
+  const r = img.getBoundingClientRect();
+  return {x: Math.min(1, Math.max(0, (cx - r.left) / r.width)), y: Math.min(1, Math.max(0, (cy - r.top) / r.height))};
+}
+
+// ---- жесты ----
+let start = null, moved = false, dragging = false, longTimer = null, last = null, twoFinger = null, scrollAcc = 0;
+const MOVE_TH = 8;
+
+stage.addEventListener('touchstart', e => {
+  e.preventDefault();
+  if (e.touches.length === 2) {
+    clearTimeout(longTimer);
+    if (dragging) { send({t: 'up', b: 'left'}); dragging = false; }
+    const a = e.touches[0], b = e.touches[1];
+    twoFinger = {y: (a.clientY + b.clientY) / 2, x: (a.clientX + b.clientX) / 2, moved: false, t: Date.now()};
+    return;
+  }
+  if (e.touches.length > 2) return;
+  const t = e.touches[0];
+  start = {x: t.clientX, y: t.clientY, time: Date.now()};
+  last = {x: t.clientX, y: t.clientY};
+  moved = false;
+  if (!touchpad && zoom === 1) send({t: 'move', ...toNorm(t.clientX, t.clientY)});
+  longTimer = setTimeout(() => {
+    if (!moved) { if (!touchpad) send({t: 'move', ...toNorm(start.x, start.y)}); send({t: 'click', b: 'right'}); start = null; navigator.vibrate && navigator.vibrate(30); }
+  }, 550);
+}, {passive: false});
+
+stage.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (twoFinger && e.touches.length === 2) {
+    const a = e.touches[0], b = e.touches[1];
+    const y = (a.clientY + b.clientY) / 2, x = (a.clientX + b.clientX) / 2;
+    if (zoom > 1 && !touchpad) {          // в зуме двумя пальцами двигаем картинку
+      panX += x - twoFinger.x; panY += y - twoFinger.y; clampPan(); applyZoom();
+    } else {
+      scrollAcc += (y - twoFinger.y);
+      const steps = Math.trunc(scrollAcc / 25);
+      if (steps) { send({t: 'scroll', dy: steps}); scrollAcc -= steps * 25; }
+    }
+    if (Math.abs(y - twoFinger.y) + Math.abs(x - twoFinger.x) > 2) twoFinger.moved = true;
+    twoFinger.x = x; twoFinger.y = y;
+    return;
+  }
+  if (!start || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  if (!moved && Math.hypot(t.clientX - start.x, t.clientY - start.y) > MOVE_TH) {
+    moved = true; clearTimeout(longTimer);
+    if (!touchpad) { send({t: 'down', b: 'left'}); dragging = true; }
+  }
+  if (moved) {
+    if (touchpad) {
+      const dx = t.clientX - last.x, dy = t.clientY - last.y;
+      const sp = Math.hypot(dx, dy), acc = 1.5 + Math.min(sp / 8, 2.5);
+      send({t: 'rel', dx: dx * acc, dy: dy * acc});
+    } else {
+      send({t: 'move', ...toNorm(t.clientX, t.clientY)});
+    }
+  }
+  last = {x: t.clientX, y: t.clientY};
+}, {passive: false});
+
+stage.addEventListener('touchend', e => {
+  e.preventDefault();
+  clearTimeout(longTimer);
+  if (twoFinger) {
+    if (e.touches.length === 0) {
+      if (!twoFinger.moved && Date.now() - twoFinger.t < 300) send({t: 'click', b: 'right'});
+      twoFinger = null; scrollAcc = 0;
+    }
+    start = null;
+    return;
+  }
+  if (dragging) { send({t: 'up', b: 'left'}); dragging = false; }
+  if (start && !moved) {
+    if (!touchpad) send({t: 'move', ...toNorm(start.x, start.y)});
+    send({t: 'click', b: 'left'});
+  }
+  start = null;
+}, {passive: false});
+
+// мышь с ПК/планшета тоже работает
+stage.addEventListener('mousedown', e => { send({t: 'move', ...toNorm(e.clientX, e.clientY)}); send({t: 'down', b: e.button === 2 ? 'right' : 'left'}); });
+stage.addEventListener('mouseup', e => send({t: 'up', b: e.button === 2 ? 'right' : 'left'}));
+stage.addEventListener('mousemove', e => { if (e.buttons) send({t: 'move', ...toNorm(e.clientX, e.clientY)}); });
+stage.addEventListener('wheel', e => { e.preventDefault(); send({t: 'scroll', dy: -Math.sign(e.deltaY)}); }, {passive: false});
+stage.addEventListener('contextmenu', e => e.preventDefault());
+
+// ---- кнопки ----
+$('#mode').onclick = () => { touchpad = !touchpad; $('#mode').textContent = touchpad ? '🖥 Экран' : '🖱 Тачпад'; };
+$('#lmb').onclick = () => send({t: 'click', b: 'left'});
+$('#rmb').onclick = () => send({t: 'click', b: 'right'});
+$('#hold').onclick = () => { holding = !holding; $('#hold').classList.toggle('on', holding); send({t: holding ? 'down' : 'up', b: 'left'}); };
+$('#more').onclick = () => $('#keys').classList.toggle('open');
+$('#kb').onclick = () => { kbd.value = ' '; kbd.focus(); };
+$('#fs').onclick = () => { const d = document.documentElement; (document.fullscreenElement ? document.exitFullscreen() : (d.requestFullscreen || d.webkitRequestFullscreen).call(d)); };
+
+function pressKey(k) {
+  if (mods.size) { send({t: 'combo', k: [...mods, k]}); clearMods(); }
+  else send({t: 'key', k});
+}
+function clearMods() { mods.clear(); document.querySelectorAll('[data-mod]').forEach(b => b.classList.remove('on')); }
+document.querySelectorAll('[data-k]').forEach(b => b.onclick = () => pressKey(b.dataset.k));
+document.querySelectorAll('[data-c]').forEach(b => b.onclick = () => send({t: 'combo', k: b.dataset.c.split('+')}));
+document.querySelectorAll('[data-mod]').forEach(b => b.onclick = () => {
+  const m = b.dataset.mod;
+  mods.has(m) ? mods.delete(m) : mods.add(m);
+  b.classList.toggle('on', mods.has(m));
+});
+
+// ---- ввод текста с клавиатуры телефона ----
+// В поле всегда лежит один пробел: если он пропал — значит нажали Backspace.
+let composing = false;
+function flush() {
+  const v = kbd.value;
+  if (v.length === 0) pressKey('backspace');
+  else if (v.length > 1) {
+    const s = v.slice(1);
+    if (mods.size && s.length === 1) pressKey(s.toLowerCase());
+    else send({t: 'text', s});
+  }
+  kbd.value = ' ';
+}
+kbd.addEventListener('compositionstart', () => composing = true);
+kbd.addEventListener('compositionend', () => { composing = false; flush(); });
+kbd.addEventListener('input', e => { if (!composing && !e.isComposing) flush(); });
+kbd.addEventListener('keydown', e => {
+  const map = {Enter: 'enter', Tab: 'tab', ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right', Escape: 'esc'};
+  if (map[e.key]) { e.preventDefault(); if (composing) { composing = false; flush(); } pressKey(map[e.key]); }
+});
+
+connect();
+</script>
+</body>
+</html>
