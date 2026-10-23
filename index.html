@@ -76,7 +76,7 @@
       border-color: var(--accent);
       box-shadow: 0 0 0 3px rgba(177, 140, 255, 0.25);
     }
-    .search-box img { width: 20px; height: 20px; flex: none; }
+    .search-box .g-icon { flex: none; }
     .search-box input {
       flex: 1;
       border: none;
@@ -115,6 +115,12 @@
     }
     .shortcut:hover .tile { background: var(--tile-hover); }
     .shortcut .tile img { width: 32px; height: 32px; border-radius: 6px; }
+    .shortcut .letter {
+      width: 32px; height: 32px; border-radius: 8px;
+      display: grid; place-items: center;
+      font-weight: 700; font-size: 17px; color: #fff;
+      background: linear-gradient(135deg, #b18cff, #4be3c0);
+    }
     .shortcut .add { font-size: 28px; color: var(--text); line-height: 1; }
     .shortcut .label {
       font-size: 13px;
@@ -168,7 +174,7 @@
   <!-- Поиск -->
   <form class="search" action="https://www.google.com/search" method="get" target="_top">
     <div class="search-box">
-      <img src="https://www.google.com/s2/favicons?domain=google.com&sz=64" alt="" />
+      <svg class="g-icon" width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.1H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 13 4 4 13 4 24s9 20 20 20 20-9 20-20c0-1.3-.1-2.6-.4-3.9z"/><path fill="#FF3D00" d="M6.3 14.7l6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 8 3l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-7.9l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.1H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.6-.4-3.9z"/></svg>
       <input name="q" type="text" placeholder="Найдите в Google или введите адрес"
              autocomplete="off" autofocus aria-label="Поиск в Google" />
     </div>
@@ -177,19 +183,19 @@
   <!-- Плитки быстрого доступа -->
   <nav class="shortcuts">
     <a class="shortcut" href="https://ru.wikipedia.org">
-      <span class="tile"><img src="https://www.google.com/s2/favicons?domain=wikipedia.org&sz=64" alt="" /></span>
+      <span class="tile"><img src="https://icons.duckduckgo.com/ip3/wikipedia.org.ico" alt="" /></span>
       <span class="label">Wikipedia</span>
     </a>
     <a class="shortcut" href="https://www.youtube.com">
-      <span class="tile"><img src="https://www.google.com/s2/favicons?domain=youtube.com&sz=64" alt="" /></span>
+      <span class="tile"><img src="https://icons.duckduckgo.com/ip3/youtube.com.ico" alt="" /></span>
       <span class="label">YouTube</span>
     </a>
     <a class="shortcut" href="https://www.reddit.com">
-      <span class="tile"><img src="https://www.google.com/s2/favicons?domain=reddit.com&sz=64" alt="" /></span>
+      <span class="tile"><img src="https://icons.duckduckgo.com/ip3/reddit.com.ico" alt="" /></span>
       <span class="label">Reddit</span>
     </a>
     <a class="shortcut" href="https://addons.mozilla.org">
-      <span class="tile"><img src="https://www.google.com/s2/favicons?domain=addons.mozilla.org&sz=64" alt="" /></span>
+      <span class="tile"><img src="https://icons.duckduckgo.com/ip3/addons.mozilla.org.ico" alt="" /></span>
       <span class="label">Add-ons for Firefox</span>
     </a>
     <a class="shortcut" href="#" id="addBtn">
@@ -199,6 +205,19 @@
   </nav>
 
   <script>
+    // Если иконка сайта не загрузилась — показываем цветную букву
+    function iconFallback(img) {
+      var l = document.createElement("span");
+      l.className = "letter";
+      l.textContent = (img.closest(".shortcut").querySelector(".label").textContent.trim()[0] || "?").toUpperCase();
+      img.replaceWith(l);
+    }
+    function watchIcon(img) {
+      img.addEventListener("error", function () { iconFallback(img); }, { once: true });
+      if (img.complete && img.naturalWidth === 0) iconFallback(img);
+    }
+    document.querySelectorAll(".shortcut .tile img").forEach(watchIcon);
+
     // Кнопка "+" — добавить свою плитку (сохраняется в этом браузере)
     document.getElementById("addBtn").addEventListener("click", function (e) {
       e.preventDefault();
@@ -211,9 +230,10 @@
         a.className = "shortcut";
         a.href = url;
         a.innerHTML =
-          '<span class="tile"><img src="https://www.google.com/s2/favicons?domain=' +
-          host + '&sz=64" alt=""></span><span class="label">' + host + '</span>';
+          '<span class="tile"><img src="https://icons.duckduckgo.com/ip3/' +
+          host + '.ico" alt=""></span><span class="label">' + host + '</span>';
         this.parentNode.insertBefore(a, this);
+        watchIcon(a.querySelector("img"));
       } catch (err) {
         alert("Не получилось распознать адрес.");
       }
