@@ -1,0 +1,223 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Новая вкладка</title>
+  <meta name="description" content="Стартовая страница: поиск и быстрый доступ к сайтам." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='16' fill='%2317161d'/><path d='M32 12 C32 23 41 32 52 32 C41 32 32 41 32 52 C32 41 23 32 12 32 C23 32 32 23 32 12 Z' fill='%23b18cff'/></svg>" />
+
+  <style>
+    :root {
+      --bg: #1c1b22;
+      --tile: #2b2a33;
+      --tile-hover: #35343f;
+      --bar: #2b2a33;
+      --text: #fbfbfe;
+      --text-dim: #cfcfd8;
+      --accent: #b18cff;
+      --radius: 8px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ---------- Логотип ---------- */
+    .logo {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 18px;
+      margin-top: 130px;
+      margin-bottom: 56px;
+    }
+    .logo-mark {
+      display: grid;
+      place-items: center;
+      filter: drop-shadow(0 12px 30px rgba(177, 140, 255, 0.28));
+    }
+    .logo-mark svg { display: block; }
+    .logo-name {
+      font-size: 42px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      background: linear-gradient(120deg, #c9b4ff, #8fb8ff 55%, #5fe6c6);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    /* ---------- Поиск ---------- */
+    .search {
+      width: min(720px, 90vw);
+      margin-bottom: 72px;
+    }
+    .search-box {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      background: var(--bar);
+      border: 1px solid transparent;
+      border-radius: 999px;
+      padding: 14px 22px;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+    .search-box:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px rgba(177, 140, 255, 0.25);
+    }
+    .search-box img { width: 20px; height: 20px; flex: none; }
+    .search-box input {
+      flex: 1;
+      border: none;
+      outline: none;
+      background: transparent;
+      color: var(--text);
+      font-size: 16px;
+    }
+    .search-box input::placeholder { color: #8f8f9d; }
+
+    /* ---------- Плитки сайтов ---------- */
+    .shortcuts {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+      width: min(720px, 90vw);
+    }
+    .shortcut {
+      width: 96px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      text-decoration: none;
+      color: var(--text-dim);
+    }
+    .shortcut .tile {
+      width: 64px;
+      height: 64px;
+      border-radius: var(--radius);
+      background: var(--tile);
+      display: grid;
+      place-items: center;
+      transition: background 0.15s ease;
+    }
+    .shortcut:hover .tile { background: var(--tile-hover); }
+    .shortcut .tile img { width: 32px; height: 32px; border-radius: 6px; }
+    .shortcut .add { font-size: 28px; color: var(--text); line-height: 1; }
+    .shortcut .label {
+      font-size: 13px;
+      text-align: center;
+      line-height: 1.25;
+      max-width: 90px;
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+
+    @media (max-width: 500px) {
+      .logo { margin-top: 90px; }
+      .logo-mark svg { width: 52px; height: 52px; }
+      .logo-name { font-size: 32px; }
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Логотип (оригинальный, тёмный) -->
+  <div class="logo">
+    <span class="logo-mark" aria-hidden="true">
+      <svg width="68" height="68" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#2d2b38" />
+            <stop offset="1" stop-color="#17161d" />
+          </linearGradient>
+          <linearGradient id="spark" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#b18cff" />
+            <stop offset="0.55" stop-color="#6ea8ff" />
+            <stop offset="1" stop-color="#4be3c0" />
+          </linearGradient>
+          <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="1.6" result="b" />
+            <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+        <rect x="1" y="1" width="62" height="62" rx="16" fill="url(#tile)" stroke="rgba(255,255,255,0.09)" />
+        <g filter="url(#glow)">
+          <path d="M32 11 C32 23 41 32 53 32 C41 32 32 41 32 53 C32 41 23 32 11 32 C23 32 32 23 32 11 Z" fill="url(#spark)" />
+          <path d="M48 15 C48 19 50.5 21.5 54.5 21.5 C50.5 21.5 48 24 48 28 C48 24 45.5 21.5 41.5 21.5 C45.5 21.5 48 19 48 15 Z" fill="url(#spark)" opacity="0.85" />
+        </g>
+      </svg>
+    </span>
+    <span class="logo-name">Nova</span>
+  </div>
+
+  <!-- Поиск -->
+  <form class="search" action="https://www.google.com/search" method="get" target="_top">
+    <div class="search-box">
+      <img src="https://www.google.com/s2/favicons?domain=google.com&sz=64" alt="" />
+      <input name="q" type="text" placeholder="Найдите в Google или введите адрес"
+             autocomplete="off" autofocus aria-label="Поиск в Google" />
+    </div>
+  </form>
+
+  <!-- Плитки быстрого доступа -->
+  <nav class="shortcuts">
+    <a class="shortcut" href="https://ru.wikipedia.org">
+      <span class="tile"><img src="https://www.google.com/s2/favicons?domain=wikipedia.org&sz=64" alt="" /></span>
+      <span class="label">Wikipedia</span>
+    </a>
+    <a class="shortcut" href="https://www.youtube.com">
+      <span class="tile"><img src="https://www.google.com/s2/favicons?domain=youtube.com&sz=64" alt="" /></span>
+      <span class="label">YouTube</span>
+    </a>
+    <a class="shortcut" href="https://www.reddit.com">
+      <span class="tile"><img src="https://www.google.com/s2/favicons?domain=reddit.com&sz=64" alt="" /></span>
+      <span class="label">Reddit</span>
+    </a>
+    <a class="shortcut" href="https://addons.mozilla.org">
+      <span class="tile"><img src="https://www.google.com/s2/favicons?domain=addons.mozilla.org&sz=64" alt="" /></span>
+      <span class="label">Add-ons for Firefox</span>
+    </a>
+    <a class="shortcut" href="#" id="addBtn">
+      <span class="tile"><span class="add">+</span></span>
+      <span class="label">Добавить</span>
+    </a>
+  </nav>
+
+  <script>
+    // Кнопка "+" — добавить свою плитку (сохраняется в этом браузере)
+    document.getElementById("addBtn").addEventListener("click", function (e) {
+      e.preventDefault();
+      var url = prompt("Введите адрес сайта (например, github.com):");
+      if (!url) return;
+      if (!/^https?:\/\//i.test(url)) url = "https://" + url;
+      try {
+        var host = new URL(url).hostname.replace(/^www\./, "");
+        var a = document.createElement("a");
+        a.className = "shortcut";
+        a.href = url;
+        a.innerHTML =
+          '<span class="tile"><img src="https://www.google.com/s2/favicons?domain=' +
+          host + '&sz=64" alt=""></span><span class="label">' + host + '</span>';
+        this.parentNode.insertBefore(a, this);
+      } catch (err) {
+        alert("Не получилось распознать адрес.");
+      }
+    });
+  </script>
+</body>
+</html>
