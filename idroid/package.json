@@ -62,7 +62,8 @@
     "portable": {
       "artifactName": "iDroid-Player-${version}-portable.exe"
     },
-    "publish": null
+    "publish": null,
+    "afterPack": "scripts/after-pack.js"
   },
   "repository": {
     "type": "git",

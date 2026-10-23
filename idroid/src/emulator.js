@@ -40,8 +40,9 @@ class EmulatorManager extends EventEmitter {
 
   logFile(inst) { return path.join(this.logDir, `${inst.id}.log`); }
 
-  args(inst) {
+  args(inst, safe = false) {
     const p = ports(inst);
+    if (safe) inst = { ...inst, gpu: 'swiftshader_indirect', quickBoot: false, vulkan: false };
     const a = [
       '-avd', avd.avdName(inst),
       '-port', String(p.console),
@@ -60,7 +61,7 @@ class EmulatorManager extends EventEmitter {
     return a;
   }
 
-  async start(inst) {
+  async start(inst, safe = false) {
     if (this.running.has(inst.id)) return;
     const root = this.getSdk();
     const t = sdk.tools(root);
@@ -71,33 +72,43 @@ class EmulatorManager extends EventEmitter {
     fs.mkdirSync(this.logDir, { recursive: true });
     avd.ensureAvd(this.avdHome, inst);
 
-    const log = fs.createWriteStream(this.logFile(inst));
-    const args = this.args(inst);
+    const log = fs.createWriteStream(this.logFile(inst), { flags: safe ? 'a' : 'w' });
+    const args = this.args(inst, safe);
     log.write(`> ${t.emulator} ${args.join(' ')}\n`);
     const proc = spawn(t.emulator, args, {
       cwd: path.dirname(t.emulator),
       env: this.env(),
       windowsHide: true,
     });
-    const rec = { proc, state: 'starting', tail: [] };
+    const rec = { proc, state: 'starting', tail: [], started: Date.now() };
     this.running.set(inst.id, rec);
     const onData = (d) => {
       log.write(d);
       const lines = d.toString().split(/\r?\n/).filter(Boolean);
       rec.tail.push(...lines);
       rec.tail = rec.tail.slice(-40);
-      for (const l of lines) if (/PANIC|FATAL|ERROR/i.test(l)) this.emit('log', inst.id, l);
+      for (const l of lines) if (/PANIC|FATAL/.test(l)) this.emit('log', inst.id, l);
     };
     proc.stdout.on('data', onData);
     proc.stderr.on('data', onData);
     proc.on('error', (e) => {
       this.emit('error', inst.id, e.message);
     });
-    proc.on('exit', (code) => {
-      log.end(`\n[exit ${code}]\n`);
+    proc.on('exit', (code, signal) => {
+      log.end(`\n[exit ${code}${signal ? ' ' + signal : ''}]\n`);
       const wasRunning = rec.state === 'running';
+      const crashed = !wasRunning && rec.state !== 'stopping' && (code !== 0 || signal);
       this.running.delete(inst.id);
-      this.emit('state', inst.id, 'stopped', { code, wasRunning, tail: rec.tail.slice(-12).join('\n') });
+      // Частые причины падения при старте — драйвер видеокарты и повреждённый снимок быстрого запуска.
+      // Один раз пробуем безопасный режим: программная графика и холодная загрузка.
+      if (crashed && !safe && Date.now() - rec.started < 120000) {
+        this.emit('log', inst.id, 'Эмулятор упал при запуске — пробую безопасный режим (программная графика, холодный старт)');
+        this.start(inst, true).catch((e) => this.emit('error', inst.id, e.message));
+        return;
+      }
+      this.emit('state', inst.id, 'stopped', {
+        code: code == null ? signal : code, wasRunning, crashed, tail: rec.tail.slice(-15).join('\n'),
+      });
     });
     this.setState(inst.id, 'booting');
     this.waitBoot(inst, rec).catch((e) => this.emit('log', inst.id, e.message));

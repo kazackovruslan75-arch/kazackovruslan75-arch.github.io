@@ -13,6 +13,38 @@ const DATA = app.getPath('userData');
 const store = new Store(DATA);
 const defaultSdk = path.join(DATA, 'sdk');
 const getSdk = () => store.get().sdkPath || defaultSdk;
+
+// Журнал главного процесса: сюда пишутся все падения, чтобы их можно было прислать разработчику.
+const MAIN_LOG = path.join(DATA, 'logs', 'main.log');
+function logMain(...a) {
+  try {
+    fs.mkdirSync(path.dirname(MAIN_LOG), { recursive: true });
+    fs.appendFileSync(MAIN_LOG, `[${new Date().toISOString()}] ${a.map((x) => (x && x.stack) || String(x)).join(' ')}\n`);
+  } catch (_) { /* ignore */ }
+}
+logMain(`start v${app.getVersion()} ${process.platform} ${process.arch} electron ${process.versions.electron}`);
+function reportCrash(title, err) {
+  logMain(title, err);
+  if (!app.isReady()) return;
+  dialog.showMessageBox({
+    type: 'error', title: 'iDroid Player', message: title,
+    detail: `${(err && err.message) || err}\n\nЖурнал: ${MAIN_LOG}`,
+    buttons: ['OK', 'Открыть журнал'],
+  }).then((r) => { if (r.response === 1) shell.openPath(MAIN_LOG); });
+}
+process.on('uncaughtException', (e) => reportCrash('Внутренняя ошибка', e));
+process.on('unhandledRejection', (e) => logMain('unhandledRejection', e));
+// Если графический процесс Chromium падает (старые драйверы, виртуальные машины),
+// со следующего запуска рисуем интерфейс без аппаратного ускорения.
+const NO_GPU_FLAG = path.join(DATA, 'disable-gpu');
+if (fs.existsSync(NO_GPU_FLAG) || process.argv.includes('--disable-gpu')) app.disableHardwareAcceleration();
+app.on('child-process-gone', (e, d) => {
+  logMain('child-process-gone', JSON.stringify(d));
+  if (d.type === 'GPU' && d.reason !== 'clean-exit' && d.reason !== 'killed') {
+    try { fs.writeFileSync(NO_GPU_FLAG, d.reason); } catch (_) { /* ignore */ }
+  }
+});
+
 const emu = new EmulatorManager({ getSdk, avdHome: path.join(DATA, 'avd'), logDir: path.join(DATA, 'logs') });
 const icons = new IconCache(DATA, (url, opts) => net.fetch(url, opts));
 
@@ -27,6 +59,21 @@ const WEB_PREFS = {
   backgroundThrottling: false,
 };
 
+function watchCrashes(win, name) {
+  win.webContents.on('render-process-gone', (e, d) => {
+    logMain(`render-process-gone ${name}`, JSON.stringify(d));
+    if (d.reason === 'clean-exit' || win.isDestroyed()) return;
+    dialog.showMessageBox(win, {
+      type: 'error', title: 'iDroid Player', message: `Окно «${name}» аварийно завершилось (${d.reason}, код ${d.exitCode})`,
+      detail: `Журнал: ${MAIN_LOG}`, buttons: ['Перезагрузить окно', 'Закрыть'],
+    }).then((r) => { if (win.isDestroyed()) return; if (r.response === 0) win.reload(); else win.close(); });
+  });
+  win.webContents.on('console-message', (e, level, msg, line, src) => {
+    if (level >= 3) logMain(`[${name}] ${msg} (${path.basename(src || '')}:${line})`);
+  });
+  win.webContents.on('preload-error', (e, p, err) => logMain(`[${name}] preload`, err));
+}
+
 function broadcast(ch, ...args) {
   for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send(ch, ...args);
 }
@@ -40,6 +87,7 @@ function createManager() {
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: WEB_PREFS,
   });
+  watchCrashes(manager, 'Менеджер');
   manager.loadFile(path.join(__dirname, 'renderer', 'manager.html'));
   manager.once('ready-to-show', () => manager.show());
   manager.on('closed', () => { manager = null; });
@@ -63,6 +111,7 @@ function openPlayer(inst) {
     icon: path.join(__dirname, 'assets', 'icon.png'),
     webPreferences: WEB_PREFS,
   });
+  watchCrashes(win, inst.name);
   win.loadFile(path.join(__dirname, 'renderer', 'player.html'), { query: { id: inst.id } });
   win.once('ready-to-show', () => win.show());
   win.on('enter-full-screen', () => win.webContents.send('fullscreen', true));
@@ -75,9 +124,12 @@ function openPlayer(inst) {
   players.set(inst.id, win);
 }
 
-emu.on('state', (id, state, info) => broadcast('emu:state', id, state, info));
-emu.on('log', (id, line) => broadcast('emu:log', id, line));
-emu.on('error', (id, msg) => broadcast('emu:error', id, msg));
+emu.on('state', (id, state, info) => {
+  if (state === 'stopped' && info && info.crashed) logMain(`emulator ${id} crashed: code ${info.code}\n${info.tail}`);
+  broadcast('emu:state', id, state, info);
+});
+emu.on('log', (id, line) => { logMain(`emulator ${id}: ${line}`); broadcast('emu:log', id, line); });
+emu.on('error', (id, msg) => { logMain(`emulator ${id} error: ${msg}`); broadcast('emu:error', id, msg); });
 
 // ---------- IPC ----------
 const handle = (ch, fn) => ipcMain.handle(ch, async (e, ...a) => fn(e, ...a));
@@ -218,6 +270,7 @@ handle('file:screenshot', (e, dataUrl) => {
   fs.writeFileSync(file, Buffer.from(dataUrl.split(',')[1], 'base64'));
   return file;
 });
+handle('app:mainlog', () => shell.openPath(MAIN_LOG));
 handle('shell:show', (e, p) => shell.showItemInFolder(p));
 handle('shell:open', (e, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); });
 

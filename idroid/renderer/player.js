@@ -153,7 +153,7 @@ function onState(state, extra = {}) {
     setBoot('Выключение…');
   } else if (state === 'stopped') {
     stopPolling();
-    const fail = extra.code && !extra.wasRunning;
+    const fail = extra.crashed || (extra.code && !extra.wasRunning);
     setBoot(fail ? `Эмулятор не запустился (код ${extra.code}).\n\n${extra.tail || ''}` : 'Эмулятор выключен', fail, [
       h('button', { class: 'btn primary', onclick: () => ipc('emu:start', ID, false).catch((e) => toast(e.message, 'err')) }, 'Запустить'),
       h('button', { class: 'btn', onclick: () => ipc('emu:log', ID) }, 'Журнал'),
@@ -633,6 +633,7 @@ function renderTitlebar() {
 ipcRenderer.on('fullscreen', (e, on) => { document.body.classList.toggle('fullscreen', on); setTimeout(layout, 50); });
 ipcRenderer.on('emu:state', (e, id, state, extra) => { if (id === ID) onState(state, extra); });
 ipcRenderer.on('emu:error', (e, id, msg) => { if (id === ID) toast(msg, 'err'); });
+ipcRenderer.on('emu:log', (e, id, msg) => { if (id === ID) toast(msg, 'err'); });
 ipcRenderer.on('store:changed', (e, d) => {
   store = d;
   const ni = d.instances.find((i) => i.id === ID);

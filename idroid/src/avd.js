@@ -56,7 +56,8 @@ function ensureAvd(avdHome, inst) {
     'tag.id': tag,
     'tag.display': 'Google Play',
     'hw.cpu.ncore': String(inst.cpu),
-    'hw.ramSize': String(inst.ram),
+    // 32-битный образ не может адресовать больше ~3 ГБ.
+    'hw.ramSize': String(abi === 'x86' ? Math.min(inst.ram, 3072) : inst.ram),
     'vm.heapSize': String(Math.min(576, Math.max(256, Math.round(inst.ram / 8)))),
     'hw.lcd.width': String(inst.width),
     'hw.lcd.height': String(inst.height),
@@ -74,10 +75,10 @@ function ensureAvd(avdHome, inst) {
     'hw.sensors.orientation': 'yes',
     'hw.gps': 'yes',
     'hw.battery': 'yes',
-    'hw.camera.back': 'virtualscene',
+    'hw.camera.back': 'emulated',
     'hw.camera.front': 'emulated',
-    'hw.sdCard': 'yes',
-    'sdcard.size': '2G',
+    // Отдельный образ SD-карты (его создаёт avdmanager) не нужен: /sdcard в Android 11+ — внутренняя память.
+    'hw.sdCard': 'no',
     'disk.dataPartition.size': `${inst.dataSize}G`,
     'fastboot.forceColdBoot': inst.quickBoot ? 'no' : 'yes',
     'fastboot.forceFastBoot': inst.quickBoot ? 'yes' : 'no',

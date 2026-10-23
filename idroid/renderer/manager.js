@@ -315,7 +315,7 @@ ipcRenderer.on('store:changed', (e, d) => {
 });
 ipcRenderer.on('emu:state', (e, id, state, extra) => {
   states[id] = state;
-  if (state === 'stopped' && extra && extra.code && !extra.wasRunning) {
+  if (state === 'stopped' && extra && (extra.crashed || (extra.code && !extra.wasRunning))) {
     toast('Эмулятор завершился с ошибкой. Откройте журнал в настройках → Дополнительно.', 'err');
   }
   const main = document.querySelector('.main');
