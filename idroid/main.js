@@ -37,7 +37,14 @@ process.on('unhandledRejection', (e) => logMain('unhandledRejection', e));
 // Если графический процесс Chromium падает (старые драйверы, виртуальные машины),
 // со следующего запуска рисуем интерфейс без аппаратного ускорения.
 const NO_GPU_FLAG = path.join(DATA, 'disable-gpu');
-if (fs.existsSync(NO_GPU_FLAG) || process.argv.includes('--disable-gpu')) app.disableHardwareAcceleration();
+if (fs.existsSync(NO_GPU_FLAG) || process.argv.includes('--disable-gpu')) {
+  app.disableHardwareAcceleration();
+} else {
+  // WebGL-вывод экрана эмулятора должен работать и на видеокартах из «чёрного списка» Chromium.
+  app.commandLine.appendSwitch('ignore-gpu-blocklist');
+  app.commandLine.appendSwitch('enable-zero-copy');
+}
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
 app.on('child-process-gone', (e, d) => {
   logMain('child-process-gone', JSON.stringify(d));
   if (d.type === 'GPU' && d.reason !== 'clean-exit' && d.reason !== 'killed') {
@@ -148,7 +155,19 @@ handle('app:info', () => ({
 handle('store:get', () => store.get());
 handle('store:patch', (e, p) => { const d = store.patch(p); broadcast('store:changed', d); return d; });
 
-handle('instance:create', (e, opts) => { const i = store.createInstance(opts); broadcast('store:changed', store.get()); return i; });
+// Ресурсы по умолчанию — половина потоков ЦП (2–4) и память по объёму ОЗУ ПК.
+// Если отдать эмулятору все ядра, Windows/Linux сами начинают тормозить, а вместе с ними и Android.
+function perfDefaults() {
+  const os = require('os');
+  const threads = os.cpus().length;
+  const memGb = os.totalmem() / 1024 ** 3;
+  return {
+    cpu: Math.max(2, Math.min(4, Math.floor(threads / 2))),
+    ram: memGb >= 15 ? 4096 : memGb >= 7 ? 3072 : 2048,
+  };
+}
+
+handle('instance:create', (e, opts) => { const i = store.createInstance({ ...perfDefaults(), ...opts }); broadcast('store:changed', store.get()); return i; });
 handle('instance:update', async (e, id, patch) => {
   const inst = store.updateInstance(id, patch);
   broadcast('store:changed', store.get());
@@ -231,6 +250,11 @@ handle('emu:log', (e, id) => {
 });
 
 handle('adb', (e, id, args, opts) => emu.adb(store.instance(id), args, opts));
+handle('adb:sh', (e, id, cmd, timeout) => {
+  const inst = store.instance(id);
+  if (emu.state(id) !== 'running') throw new Error('Эмулятор не запущен');
+  return emu.sh(inst, cmd, timeout);
+});
 handle('adb:install', async (e, id, files) => {
   const inst = store.instance(id);
   const res = [];

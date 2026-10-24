@@ -134,6 +134,10 @@ const BUILDERS = {
         cell('cpu', '#5e5ce6', 'Ядра процессора', seg(cpuOpts, inst.cpu, (v) => set({ cpu: Number(v) }))),
         cell('memory', '#30d158', 'Оперативная память', seg(ramOpts, inst.ram, (v) => set({ ram: Number(v) }))),
       ]),
+      group('Изображение', [
+        cell('display', '#ff9f0a', 'Качество картинки', seg([['fast', 'Производительность'], ['auto', 'Авто'], ['full', 'Максимальное']], inst.streamQuality || 'auto', (v) => set({ streamQuality: v })),
+          'Авто — кадр размером с окно. «Производительность» уменьшает его ещё сильнее: меньше задержка и нагрузка на ЦП'),
+      ]),
       group('Эко-режим', [
         cell('eco', '#30d158', 'Эко-режим', sw(inst.ecoMode, (v) => set({ ecoMode: v })), 'Снижает частоту отрисовки окна, экономит ЦП/ГП в фоне'),
         cell(null, null, 'Кадров в секунду в эко-режиме', seg([[5, '5'], [10, '10'], [15, '15'], [30, '30']], inst.ecoFps, (v) => set({ ecoFps: Number(v) }), !inst.ecoMode)),

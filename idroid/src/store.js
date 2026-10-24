@@ -29,6 +29,7 @@ const DEFAULT_INSTANCE = {
   mouseSensitivity: 1.0,
   overlayOpacity: 0.6,
   showKeyHints: true,
+  streamQuality: 'auto',
 };
 
 const DEFAULTS = {

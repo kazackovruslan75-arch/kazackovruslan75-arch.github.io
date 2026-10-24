@@ -34,7 +34,7 @@ class Springboard {
     root.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
-  adb(cmd) { return ipc('adb', this.instId, ['shell', cmd], { timeout: 20000 }); }
+  adb(cmd) { return ipc('adb:sh', this.instId, cmd, 20000); }
 
   async detectLauncher() {
     try {

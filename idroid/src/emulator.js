@@ -14,6 +14,77 @@ function serial(inst) { return `emulator-${ports(inst).console}`; }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Постоянная сессия `adb shell`: команды пишутся в один процесс, а не запускают adb каждый раз.
+// Запуск adb — десятки миллисекунд ЦП (на Windows больше), при частом опросе это заметно.
+class AdbShell {
+  constructor(spawnShell) {
+    this.spawnShell = spawnShell;
+    this.proc = null;
+    this.queue = [];
+    this.busy = null;
+    this.buf = '';
+    this.seq = 0;
+  }
+
+  run(cmd, timeout = 8000) {
+    return new Promise((resolve, reject) => {
+      this.queue.push({ cmd, resolve, reject, timeout });
+      this.next();
+    });
+  }
+
+  ensure() {
+    if (this.proc) return;
+    const p = this.spawnShell();
+    this.proc = p;
+    this.buf = '';
+    p.stdout.on('data', (d) => { this.buf += d.toString(); this.check(); });
+    p.stderr.on('data', () => {});
+    p.on('error', () => {});
+    p.on('exit', () => {
+      if (this.proc === p) this.proc = null;
+      const b = this.busy;
+      if (b) { this.busy = null; clearTimeout(b.t); b.reject(new Error('adb shell завершился')); }
+      setTimeout(() => this.next(), 300);
+    });
+  }
+
+  next() {
+    if (this.busy || !this.queue.length || this.closed) return;
+    const job = this.queue.shift();
+    this.ensure();
+    job.marker = `__IDROID_DONE_${++this.seq}__`;
+    this.busy = job;
+    this.buf = '';
+    job.t = setTimeout(() => this.kill(), job.timeout);
+    this.proc.stdin.write(`${job.cmd}\necho ${job.marker}\n`);
+  }
+
+  check() {
+    const b = this.busy;
+    if (!b) return;
+    const i = this.buf.indexOf(b.marker);
+    if (i < 0) return;
+    const out = this.buf.slice(0, i);
+    this.buf = '';
+    clearTimeout(b.t);
+    this.busy = null;
+    b.resolve(out);
+    this.next();
+  }
+
+  kill() {
+    if (this.proc) try { this.proc.kill(); } catch (_) { /* ignore */ }
+  }
+
+  close() {
+    this.closed = true;
+    for (const j of this.queue) j.reject(new Error('Эмулятор выключен'));
+    this.queue = [];
+    this.kill();
+  }
+}
+
 class EmulatorManager extends EventEmitter {
   constructor({ getSdk, avdHome, logDir }) {
     super();
@@ -21,6 +92,7 @@ class EmulatorManager extends EventEmitter {
     this.avdHome = avdHome;
     this.logDir = logDir;
     this.running = new Map();
+    this.shells = new Map();
   }
 
   env() {
@@ -99,6 +171,7 @@ class EmulatorManager extends EventEmitter {
       const wasRunning = rec.state === 'running';
       const crashed = !wasRunning && rec.state !== 'stopping' && (code !== 0 || signal);
       this.running.delete(inst.id);
+      this.closeShell(inst.id);
       // Частые причины падения при старте — драйвер видеокарты и повреждённый снимок быстрого запуска.
       // Один раз пробуем безопасный режим: программная графика и холодная загрузка.
       if (crashed && !safe && Date.now() - rec.started < 120000) {
@@ -161,9 +234,26 @@ class EmulatorManager extends EventEmitter {
   }
 
   stopAll() {
+    for (const id of [...this.shells.keys()]) this.closeShell(id);
     for (const [, r] of this.running) {
       try { r.proc.kill(); } catch (_) { /* ignore */ }
     }
+  }
+
+  // Быстрая shell-команда через постоянную сессию (для частого опроса).
+  sh(inst, cmd, timeout) {
+    let s = this.shells.get(inst.id);
+    if (!s) {
+      const t = sdk.tools(this.getSdk());
+      s = new AdbShell(() => spawn(t.adb, ['-s', serial(inst), 'shell'], { env: this.env(), windowsHide: true }));
+      this.shells.set(inst.id, s);
+    }
+    return s.run(cmd, timeout);
+  }
+
+  closeShell(id) {
+    const s = this.shells.get(id);
+    if (s) { s.close(); this.shells.delete(id); }
   }
 
   adb(inst, args, { timeout = 60000, maxBuffer = 64 * 1024 * 1024 } = {}) {

@@ -21,7 +21,9 @@ function writeIni(file, obj) {
 }
 
 function gpuMode(inst) {
-  if (inst.gpu === 'auto') return process.platform === 'win32' ? 'auto' : 'host';
+  // «Авто» = аппаратный рендер: он быстрее всего. Если драйвер его не вытянет,
+  // эмулятор упадёт при старте и перезапустится в безопасном (программном) режиме.
+  if (inst.gpu === 'auto') return 'host';
   return inst.gpu;
 }
 

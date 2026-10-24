@@ -30,12 +30,20 @@ class EmuLink {
     });
     this.call = null;
     this.closed = false;
+    this.paused = false;
     this.size = null;
+    this.format = 'RGBA8888';
+    // Очередь касаний: не больше двух запросов «в полёте», движения одного пальца схлопываются.
+    // Иначе мышь с частотой 1000 Гц забивает канал и ввод начинает отставать.
+    this.touchQueue = [];
+    this.inFlight = 0;
+    this.down = new Set();
   }
 
-  // Поток кадров RGBA с автоматическим переподключением.
-  stream(size, onFrame, onStatus) {
+  // Поток кадров (RGB888 для WebGL, RGBA8888 для 2D) с автоматическим переподключением.
+  stream(size, onFrame, onStatus, format = 'RGBA8888') {
     this.size = size;
+    this.format = format;
     this.onFrame = onFrame;
     this.onStatus = onStatus || (() => {});
     this.restartStream();
@@ -47,11 +55,26 @@ class EmuLink {
     this.restartStream();
   }
 
+  // Окно свёрнуто — кадры не нужны, не тратим на них ЦП.
+  pause() {
+    if (this.paused) return;
+    this.paused = true;
+    clearTimeout(this.retryT);
+    if (this.call) { const c = this.call; this.call = null; try { c.cancel(); } catch (_) { /* ignore */ } }
+  }
+
+  resume() {
+    if (!this.paused) return;
+    this.paused = false;
+    if (this.size) this.restartStream();
+  }
+
   restartStream() {
     if (this.call) { const c = this.call; this.call = null; try { c.cancel(); } catch (_) { /* ignore */ } }
-    if (this.closed) return;
+    if (this.closed || this.paused) return;
     clearTimeout(this.retryT);
-    const call = this.client.streamScreenshot({ format: 'RGBA8888', width: this.size.width, height: this.size.height, display: 0 });
+    const bpp = this.format === 'RGB888' ? 3 : 4;
+    const call = this.client.streamScreenshot({ format: this.format, width: this.size.width, height: this.size.height, display: 0 });
     this.call = call;
     let got = false;
     call.on('data', (img) => {
@@ -59,7 +82,7 @@ class EmuLink {
       const f = img.format || {};
       const w = f.width || img.width;
       const hgt = f.height || img.height;
-      if (w && hgt && img.image && img.image.length >= w * hgt * 4) this.onFrame(img.image, w, hgt);
+      if (w && hgt && img.image && img.image.length >= w * hgt * bpp) this.onFrame(img.image, w, hgt);
     });
     const retry = () => {
       if (this.call !== call || this.closed) return;
@@ -72,7 +95,33 @@ class EmuLink {
   }
 
   touch(touches) {
-    this.client.sendTouch({ touches, display: 0 }, () => {});
+    for (const t of touches) {
+      const moving = t.pressure > 0;
+      let merged = false;
+      if (moving) {
+        for (let i = this.touchQueue.length - 1; i >= 0; i--) {
+          const q = this.touchQueue[i];
+          if (q.identifier !== t.identifier) continue;
+          if (q.pressure > 0 && q.moved) { this.touchQueue[i] = { ...t, moved: true }; merged = true; }
+          break;
+        }
+      }
+      // Первое касание пальца (down) не схлопывается, только последующие движения.
+      if (!merged) this.touchQueue.push({ ...t, moved: moving && this.down.has(t.identifier) });
+      if (moving) this.down.add(t.identifier); else this.down.delete(t.identifier);
+    }
+    this.pumpTouches();
+  }
+
+  pumpTouches() {
+    while (this.inFlight < 2 && this.touchQueue.length) {
+      const { moved, ...t } = this.touchQueue.shift();
+      this.inFlight++;
+      this.client.sendTouch({ touches: [t], display: 0 }, () => {
+        this.inFlight--;
+        this.pumpTouches();
+      });
+    }
   }
 
   key(eventType, key) {

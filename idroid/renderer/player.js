@@ -5,13 +5,14 @@ const { EmuLink } = require(path.join(__dirname, 'stream.js'));
 const { KeymapEngine, TYPES, TEMPLATES, keyLabel } = require(path.join(__dirname, 'keymap.js'));
 const { Springboard } = require(path.join(__dirname, 'springboard.js'));
 const { mountSettings } = require(path.join(__dirname, 'settings.js'));
+const { ScreenRenderer } = require(path.join(__dirname, 'screen-gl.js'));
 
 const ID = new URLSearchParams(location.search).get('id');
 const $ = (id) => document.getElementById(id);
 const stage = $('stage');
 const screenEl = $('screen');
 const cv = $('cv');
-const ctx2d = cv.getContext('2d', { alpha: false, desynchronized: true });
+const screen = new ScreenRenderer(cv);
 
 let info; let store; let inst; let ports;
 let link = null;
@@ -86,16 +87,29 @@ function layout() {
   cv.style.height = ch + 'px';
   cv.style.transform = `translate(-50%, -50%) rotate(${-90 * r}deg)`;
   if (link) {
-    const dpr = window.devicePixelRatio || 1;
-    const k = Math.min(1, (cw * dpr) / devW());
-    const req = { width: Math.round(devW() * k), height: Math.round(devH() * k) };
-    if (!link.size || Math.abs(req.width - link.size.width) / link.size.width > 0.12) link.resize(req);
+    const req = streamSize(cw);
+    if (!link.size || Math.abs(req.width - link.size.width) / link.size.width > 0.06) link.resize(req);
   }
   km.render();
   if (sb.visible) sb.render();
 }
 
-new ResizeObserver(() => layout()).observe(stage);
+// Размер кадра, который просим у эмулятора: не больше, чем реально видно на экране.
+// «Производительность» дополнительно уменьшает картинку — меньше данных, меньше задержка.
+function streamSize(cssW) {
+  const dpr = window.devicePixelRatio || 1;
+  const quality = inst.streamQuality || 'auto';
+  let k = quality === 'full' ? 1 : Math.min(1, (cssW * dpr) / devW());
+  if (quality === 'fast') k = Math.min(k, 0.6);
+  k = Math.max(k, 0.25);
+  return { width: Math.round(devW() * k) & ~1, height: Math.round(devH() * k) & ~1 };
+}
+
+let layoutRaf = 0;
+new ResizeObserver(() => {
+  cancelAnimationFrame(layoutRaf);
+  layoutRaf = requestAnimationFrame(layout);
+}).observe(stage);
 
 // ---------------- поток кадров ----------------
 function onFrame(buf, w, hgt) {
@@ -114,8 +128,7 @@ function drawLoop(now) {
   lastDraw = now;
   const { buf, w, h: hgt } = frame;
   frame = null;
-  if (cv.width !== w || cv.height !== hgt) { cv.width = w; cv.height = hgt; }
-  ctx2d.putImageData(new ImageData(new Uint8ClampedArray(buf.buffer, buf.byteOffset, w * hgt * 4), w, hgt), 0, 0);
+  screen.draw(buf, w, hgt);
   if (recorder) recorder.draw();
 }
 requestAnimationFrame(drawLoop);
@@ -123,9 +136,16 @@ requestAnimationFrame(drawLoop);
 function connect() {
   if (link) return;
   link = new EmuLink({ port: ports.grpc, protoPath: ports.proto });
-  link.stream({ width: devW(), height: devH() }, onFrame, () => {});
+  link.stream(streamSize(cv.clientWidth || devW()), onFrame, () => {}, screen.format);
+  if (document.hidden) link.pause();
   layout();
 }
+
+// Свёрнутое окно не получает и не рисует кадры (Android при этом продолжает работать).
+document.addEventListener('visibilitychange', () => {
+  if (!link) return;
+  if (document.hidden) link.pause(); else link.resume();
+});
 
 // ---------------- состояние эмулятора ----------------
 function setBoot(text, err, actions = []) {
@@ -174,23 +194,35 @@ async function afterBoot() {
 
 function startPolling() {
   stopPolling();
-  pollT = setInterval(poll, 1500);
+  pollT = setInterval(() => { if (!document.hidden) poll(); }, 2000);
 }
 function stopPolling() { clearInterval(pollT); pollT = null; }
 
 let polling = false;
+let pollN = 0;
+let pollRotBurst = 1;
 async function poll() {
   if (polling || emuState !== 'running') return;
   polling = true;
   try {
-    const out = await ipc('adb', ID, ['shell', "dumpsys window | grep -m1 mCurrentFocus; dumpsys input | grep -m2 -E 'SurfaceOrientation|Viewport INTERNAL'"], { timeout: 6000 });
+    // Фокус дёшево узнаётся из списка окон; поворот (dumpsys input — тяжёлый) проверяем
+    // только при смене приложения и изредка, иначе Android подлагивает каждые пару секунд.
+    pollN++;
+    const wantRot = pollN % 4 === 0 || pollRotBurst > 0;
+    if (pollRotBurst > 0) pollRotBurst--;
+    const cmd = '(dumpsys window displays | grep -m1 mCurrentFocus || dumpsys window | grep -m1 mCurrentFocus)' +
+      (wantRot ? "; dumpsys input | grep -m2 -E 'SurfaceOrientation|Viewport INTERNAL'" : '');
+    const out = await ipc('adb:sh', ID, cmd);
     const f = out.match(/mCurrentFocus=Window\{\S+ \S+ ([\w.]+)/);
     const pkg = f ? f[1] : '';
     const o = out.match(/SurfaceOrientation:\s*(\d)/) || out.match(/orientation=(\d)/);
-    const rot = o ? Number(o[1]) & 3 : 0;
-    if (rot !== rotation) { rotation = rot; layout(); }
+    if (o) {
+      const rot = Number(o[1]) & 3;
+      if (rot !== rotation) { rotation = rot; layout(); }
+    }
     if (pkg && pkg !== fgPkg) {
       fgPkg = pkg;
+      pollRotBurst = 2;
       if (pkg === sb.launcherPkg) sb.show();
       else if (sb.visible && !/systemui|inputmethod|permissioncontroller/.test(pkg)) sb.hide();
       selectScheme();
@@ -309,6 +341,7 @@ function goHome() {
 async function rotate() {
   const next = rotation % 2 ? 0 : 1;
   await ipc('adb', ID, ['shell', `settings put system accelerometer_rotation 0; settings put system user_rotation ${next}`]).catch(() => {});
+  pollRotBurst = 2;
   setTimeout(poll, 400);
 }
 async function toggleEco() {
@@ -638,7 +671,7 @@ ipcRenderer.on('store:changed', (e, d) => {
   store = d;
   const ni = d.instances.find((i) => i.id === ID);
   if (!ni) return;
-  const relayout = ni.autoRotate !== inst.autoRotate || ni.width !== inst.width || ni.height !== inst.height;
+  const relayout = ni.autoRotate !== inst.autoRotate || ni.width !== inst.width || ni.height !== inst.height || ni.streamQuality !== inst.streamQuality;
   inst = ni;
   applyTheme(store.ui.theme);
   $('fps').hidden = !inst.showFps;
