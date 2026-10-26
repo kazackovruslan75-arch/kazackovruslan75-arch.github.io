@@ -1,0 +1,43 @@
+name: dotify
+description: Dotify for iOS — music player (YouTube Music search & playback).
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  youtube_explode_dart: ^2.4.0
+  just_audio: any
+  just_audio_background: any
+  shared_preferences: ^2.2.0
+  path_provider: ^2.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_launcher_icons: any
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
+
+flutter_launcher_icons:
+  ios: true
+  android: false
+  image_path: assets/images/logo.png
+  remove_alpha_ios: true
+  background_color_ios: "#121212"
